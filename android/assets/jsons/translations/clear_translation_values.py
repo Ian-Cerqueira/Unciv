@@ -2,6 +2,13 @@
 from pathlib import Path
 
 
+# Chaves cujos valores devem ser preservados
+PRESERVED_KEYS = {
+    "Fastlane_short_description ",
+    "Fastlane_full_description "
+}
+
+
 def clean_properties(input_file):
     input_path = Path(input_file)
 
@@ -15,7 +22,6 @@ def clean_properties(input_file):
     cleaned_lines = []
 
     for line in lines:
-        # Separa o conteúdo da quebra de linha original
         content = line.rstrip("\r\n")
         newline = line[len(content):]
 
@@ -41,11 +47,17 @@ def clean_properties(input_file):
 
             escaped = False
 
-        if separator != -1:
-            key = content[:separator]
-            cleaned_lines.append(key + "=" + newline)
-        else:
+        if separator == -1:
             cleaned_lines.append(line)
+            continue
+
+        key = content[:separator]
+
+        # Preserva integralmente as linhas das chaves protegidas
+        if key in PRESERVED_KEYS:
+            cleaned_lines.append(line)
+        else:
+            cleaned_lines.append(key + "=" + newline)
 
     with open(output_path, "w", encoding="utf-8", newline="") as f:
         f.writelines(cleaned_lines)
