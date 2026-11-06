@@ -1,12 +1,21 @@
-
 from pathlib import Path
 
 
-# Chaves cujos valores devem ser preservados
-PRESERVED_KEYS = {
-    "Fastlane_short_description ",
-    "Fastlane_full_description "
-}
+def find_separator(content):
+    """Encontra o primeiro '=' não escapado."""
+    escaped = False
+
+    for i, char in enumerate(content):
+        if char == "\\" and not escaped:
+            escaped = True
+            continue
+
+        if char == "=" and not escaped:
+            return i
+
+        escaped = False
+
+    return -1
 
 
 def clean_properties(input_file):
@@ -20,44 +29,47 @@ def clean_properties(input_file):
         lines = f.readlines()
 
     cleaned_lines = []
+    inside_fastlane = False
 
     for line in lines:
         content = line.rstrip("\r\n")
         newline = line[len(content):]
+        stripped = content.strip()
 
-        stripped = content.lstrip()
-
-        # Preserva comentários e linhas vazias
-        if not stripped or stripped.startswith(("#", "!")):
-            cleaned_lines.append(line)
+        # Identifica o início da seção Fastlane
+        if stripped.lower() == "# fastlane":
+            inside_fastlane = True
             continue
 
-        # Procura o primeiro '=' não escapado
-        escaped = False
-        separator = -1
+        # Remove o marcador de tradução
+        if stripped == "# Require translation !":
+            continue
 
-        for i, char in enumerate(content):
-            if char == "\\" and not escaped:
-                escaped = True
-                continue
+        # Preserva comentários e linhas vazias fora de Fastlane
+        if not stripped or stripped.startswith(("#", "!")):
+            if not inside_fastlane:
+                cleaned_lines.append(line)
+            continue
 
-            if char == "=" and not escaped:
-                separator = i
-                break
-
-            escaped = False
+        separator = find_separator(content)
 
         if separator == -1:
-            cleaned_lines.append(line)
+            if not inside_fastlane:
+                cleaned_lines.append(line)
             continue
 
-        key = content[:separator]
+        key = content[:separator].strip()
 
-        # Preserva integralmente as linhas das chaves protegidas
-        if key in PRESERVED_KEYS:
-            cleaned_lines.append(line)
-        else:
-            cleaned_lines.append(key + "=" + newline)
+        # Remove as chaves Fastlane e seus valores
+        if key.startswith("Fastlane_"):
+            continue
+
+        # Ao encontrar uma chave não Fastlane, encerra a seção
+        # e volta a processar normalmente o restante do arquivo.
+        inside_fastlane = False
+
+        # Preserva a chave e limpa seu valor
+        cleaned_lines.append(content[:separator] + "=" + newline)
 
     with open(output_path, "w", encoding="utf-8", newline="") as f:
         f.writelines(cleaned_lines)
